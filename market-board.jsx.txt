@@ -1,0 +1,1065 @@
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from "recharts";
+import {
+  Radio, Flame, Search, BarChart3, TrendingUp, TrendingDown, Star, Play, Pause, Key, Wallet, CheckCircle2, AlertTriangle, History, Phone, ShieldCheck, LogOut,
+} from "lucide-react";
+
+/* ============================================================
+   TOKENS
+   bg #0B1120  surface #121B2E  surfaceAlt #1A2540  border #24304A
+   accent(brass) #E8B04B  positive #52D68A  negative #F2666E
+   text #EDEDE3  muted #8894AD
+   ============================================================ */
+const C = {
+  bg: "#0B1120",
+  surface: "#121B2E",
+  surfaceAlt: "#1A2540",
+  border: "#243050",
+  accent: "#E8B04B",
+  positive: "#52D68A",
+  negative: "#F2666E",
+  text: "#EDEDE3",
+  muted: "#8894AD",
+};
+
+/* ============================================================
+   MOCK MARKET UNIVERSE
+   TODO(real data): replace generateInitial() + the tick interval
+   below with calls to your market-data API (e.g. fetch quotes on
+   an interval, or a websocket stream). Keep the same asset shape
+   { symbol, name, type, price, open, volatility, volume, history }
+   so the rest of the UI needs no changes.
+   ============================================================ */
+const SEED_ASSETS = [
+  // Stocks
+  { symbol: "AAPL", name: "Apple Inc.", type: "stock", price: 214.5, volatility: 0.004 },
+  { symbol: "MSFT", name: "Microsoft Corp.", type: "stock", price: 461.2, volatility: 0.0035 },
+  { symbol: "NVDA", name: "NVIDIA Corp.", type: "stock", price: 148.9, volatility: 0.007 },
+  { symbol: "TSLA", name: "Tesla Inc.", type: "stock", price: 262.3, volatility: 0.009 },
+  { symbol: "GOOGL", name: "Alphabet Inc.", type: "stock", price: 189.4, volatility: 0.004 },
+  { symbol: "AMZN", name: "Amazon.com Inc.", type: "stock", price: 223.1, volatility: 0.0045 },
+  { symbol: "META", name: "Meta Platforms Inc.", type: "stock", price: 612.8, volatility: 0.006 },
+  { symbol: "NFLX", name: "Netflix Inc.", type: "stock", price: 985.4, volatility: 0.0065 },
+  { symbol: "AMD", name: "Advanced Micro Devices", type: "stock", price: 158.2, volatility: 0.008 },
+  { symbol: "INTC", name: "Intel Corp.", type: "stock", price: 31.4, volatility: 0.0075 },
+  { symbol: "JPM", name: "JPMorgan Chase & Co.", type: "stock", price: 232.6, volatility: 0.003 },
+  { symbol: "V", name: "Visa Inc.", type: "stock", price: 318.9, volatility: 0.0025 },
+  { symbol: "WMT", name: "Walmart Inc.", type: "stock", price: 96.7, volatility: 0.0025 },
+  { symbol: "DIS", name: "Walt Disney Co.", type: "stock", price: 112.3, volatility: 0.004 },
+  { symbol: "BA", name: "Boeing Co.", type: "stock", price: 189.6, volatility: 0.006 },
+  { symbol: "KO", name: "Coca-Cola Co.", type: "stock", price: 71.8, volatility: 0.002 },
+  { symbol: "PEP", name: "PepsiCo Inc.", type: "stock", price: 148.5, volatility: 0.002 },
+  { symbol: "XOM", name: "Exxon Mobil Corp.", type: "stock", price: 118.2, volatility: 0.0035 },
+  { symbol: "JNJ", name: "Johnson & Johnson", type: "stock", price: 156.9, volatility: 0.002 },
+  { symbol: "ORCL", name: "Oracle Corp.", type: "stock", price: 178.4, volatility: 0.0055 },
+  { symbol: "CRM", name: "Salesforce Inc.", type: "stock", price: 302.7, volatility: 0.005 },
+  { symbol: "ADBE", name: "Adobe Inc.", type: "stock", price: 421.3, volatility: 0.0045 },
+  { symbol: "PYPL", name: "PayPal Holdings Inc.", type: "stock", price: 78.6, volatility: 0.006 },
+  { symbol: "UBER", name: "Uber Technologies Inc.", type: "stock", price: 84.9, volatility: 0.0065 },
+  { symbol: "SBUX", name: "Starbucks Corp.", type: "stock", price: 91.2, volatility: 0.004 },
+  // Small-cap stocks
+  { symbol: "SOFI", name: "SoFi Technologies", type: "stock", price: 14.8, volatility: 0.014 },
+  { symbol: "PLUG", name: "Plug Power Inc.", type: "stock", price: 3.2, volatility: 0.022 },
+  { symbol: "RIOT", name: "Riot Platforms Inc.", type: "stock", price: 11.6, volatility: 0.02 },
+  { symbol: "IONQ", name: "IonQ Inc.", type: "stock", price: 24.3, volatility: 0.024 },
+  { symbol: "CHPT", name: "ChargePoint Holdings", type: "stock", price: 2.1, volatility: 0.021 },
+  { symbol: "OPEN", name: "Opendoor Technologies", type: "stock", price: 1.9, volatility: 0.02 },
+  // Funds (ETFs / index funds)
+  { symbol: "SPY", name: "S&P 500 ETF Trust", type: "fund", price: 612.4, volatility: 0.0018 },
+  { symbol: "QQQ", name: "Nasdaq-100 ETF", type: "fund", price: 528.7, volatility: 0.0025 },
+  { symbol: "VTI", name: "Total Market ETF", type: "fund", price: 298.1, volatility: 0.0018 },
+  { symbol: "ARKK", name: "ARK Innovation ETF", type: "fund", price: 52.3, volatility: 0.006 },
+  { symbol: "GLD", name: "Gold Shares ETF", type: "fund", price: 246.9, volatility: 0.0015 },
+  { symbol: "NIFTYBEES", name: "Nifty 50 ETF", type: "fund", price: 264.5, volatility: 0.002 },
+  { symbol: "GOLDBEES", name: "Gold ETF (India)", type: "fund", price: 68.2, volatility: 0.0015 },
+  // Crypto
+  { symbol: "BTC", name: "Bitcoin", type: "crypto", price: 68420, volatility: 0.012 },
+  { symbol: "ETH", name: "Ethereum", type: "crypto", price: 3620, volatility: 0.014 },
+  { symbol: "SOL", name: "Solana", type: "crypto", price: 178.6, volatility: 0.018 },
+  { symbol: "DOGE", name: "Dogecoin", type: "crypto", price: 0.184, volatility: 0.022 },
+  { symbol: "XRP", name: "Ripple", type: "crypto", price: 2.31, volatility: 0.016 },
+  { symbol: "ADA", name: "Cardano", type: "crypto", price: 0.71, volatility: 0.017 },
+  { symbol: "BNB", name: "BNB", type: "crypto", price: 612.4, volatility: 0.013 },
+  { symbol: "AVAX", name: "Avalanche", type: "crypto", price: 38.6, volatility: 0.02 },
+  { symbol: "MATIC", name: "Polygon", type: "crypto", price: 0.62, volatility: 0.019 },
+  { symbol: "DOT", name: "Polkadot", type: "crypto", price: 6.84, volatility: 0.018 },
+  { symbol: "LINK", name: "Chainlink", type: "crypto", price: 15.9, volatility: 0.019 },
+  { symbol: "LTC", name: "Litecoin", type: "crypto", price: 92.3, volatility: 0.015 },
+  { symbol: "TRX", name: "TRON", type: "crypto", price: 0.16, volatility: 0.014 },
+  { symbol: "SHIB", name: "Shiba Inu", type: "crypto", price: 0.0000228, volatility: 0.025 },
+  { symbol: "ATOM", name: "Cosmos", type: "crypto", price: 7.42, volatility: 0.018 },
+  { symbol: "NEAR", name: "NEAR Protocol", type: "crypto", price: 4.85, volatility: 0.021 },
+];
+
+const HISTORY_LEN = 30;
+
+function randomWalk(price, volatility) {
+  const drift = (Math.random() - 0.5) * 2 * volatility;
+  return Math.max(price * (1 + drift), 0.0001);
+}
+
+function buildInitialAsset(seed) {
+  const history = [];
+  let p = seed.price;
+  for (let i = HISTORY_LEN; i > 0; i--) {
+    p = randomWalk(p, seed.volatility);
+    history.push({ t: i, price: p });
+  }
+  history.push({ t: 0, price: seed.price });
+  return {
+    ...seed,
+    open: history[0].price,
+    volume: Math.round((seed.type === "crypto" ? 5e8 : 2e7) * (0.4 + Math.random() * 1.2)),
+    history,
+  };
+}
+
+function tickAsset(asset) {
+  const nextPrice = randomWalk(asset.price, asset.volatility);
+  const nextHistory = [...asset.history.slice(1), { t: asset.history[asset.history.length - 1].t + 1, price: nextPrice }];
+  return { ...asset, price: nextPrice, history: nextHistory };
+}
+
+function pctChange(asset) {
+  return ((asset.price - asset.open) / asset.open) * 100;
+}
+
+function trendDirection(asset) {
+  const h = asset.history;
+  const recent = h.slice(-5).reduce((s, x) => s + x.price, 0) / 5;
+  const prior = h.slice(-10, -5).reduce((s, x) => s + x.price, 0) / Math.max(h.slice(-10, -5).length, 1);
+  return recent >= prior ? "up" : "down";
+}
+
+function TrendBadge({ asset }) {
+  const dir = trendDirection(asset);
+  const up = dir === "up";
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+      style={{
+        color: up ? C.positive : C.negative,
+        border: `1px solid ${up ? "rgba(82,214,138,0.4)" : "rgba(242,102,110,0.4)"}`,
+      }}
+    >
+      {up ? "Uptrend" : "Downtrend"}
+    </span>
+  );
+}
+
+function fmtPrice(p) {
+  if (p >= 1000) return p.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  if (p >= 1) return p.toFixed(2);
+  if (p >= 0.01) return p.toFixed(4);
+  return p.toFixed(8);
+}
+
+function sma(history, window = 5) {
+  return history.map((pt, i) => {
+    if (i < window - 1) return { ...pt, sma: null };
+    const slice = history.slice(i - window + 1, i + 1);
+    const avg = slice.reduce((s, x) => s + x.price, 0) / window;
+    return { ...pt, sma: avg };
+  });
+}
+
+/* ============================================================ */
+
+function Sparkline({ history, color }) {
+  return (
+    <ResponsiveContainer width="100%" height={36}>
+      <LineChart data={history}>
+        <Line type="monotone" dataKey="price" stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function ChangeTag({ pct }) {
+  const up = pct >= 0;
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
+      style={{
+        color: up ? C.positive : C.negative,
+        backgroundColor: up ? "rgba(82,214,138,0.12)" : "rgba(242,102,110,0.12)",
+        fontFamily: "'IBM Plex Mono', monospace",
+      }}
+    >
+      {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+      {up ? "+" : ""}
+      {pct.toFixed(2)}%
+    </span>
+  );
+}
+
+function TypeBadge({ type }) {
+  return (
+    <span
+      className="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase"
+      style={{ color: C.muted, backgroundColor: "rgba(136,148,173,0.12)", fontFamily: "'IBM Plex Mono', monospace" }}
+    >
+      {type}
+    </span>
+  );
+}
+
+export default function MarketBoard() {
+  const [universe, setUniverse] = useState(() => SEED_ASSETS.map(buildInitialAsset));
+  const [watchlist, setWatchlist] = useState(() => new Set(["AAPL", "NVDA", "TSLA", "BTC", "ETH", "SOL"]));
+  const [tab, setTab] = useState("live");
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [selectedSymbol, setSelectedSymbol] = useState("AAPL");
+  const [autoCycle, setAutoCycle] = useState(false);
+  const [broker, setBroker] = useState({ provider: "alpaca", apiKey: "", apiSecret: "", connected: false });
+  const [cash, setCash] = useState(100000);
+  const [holdings, setHoldings] = useState({});
+  const [orderQty, setOrderQty] = useState(1);
+  const [autoPick, setAutoPick] = useState(false);
+  const [autoAdded, setAutoAdded] = useState(new Set());
+  const [trades, setTrades] = useState([]);
+  const [auth, setAuth] = useState({ stage: "phone", name: "", phone: "", otpInput: "", sentOtp: null, verified: false, error: "" });
+  const intervalRef = useRef(null);
+  const cycleRef = useRef(null);
+
+  useEffect(() => {
+    if (autoRefresh) {
+      intervalRef.current = setInterval(() => {
+        setUniverse((prev) => prev.map(tickAsset));
+      }, 2200);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [autoRefresh]);
+
+  useEffect(() => {
+    if (autoCycle) {
+      cycleRef.current = setInterval(() => {
+        setSelectedSymbol((prev) => {
+          const idx = SEED_ASSETS.findIndex((a) => a.symbol === prev);
+          const next = SEED_ASSETS[(idx + 1) % SEED_ASSETS.length];
+          return next.symbol;
+        });
+      }, 3500);
+    }
+    return () => clearInterval(cycleRef.current);
+  }, [autoCycle]);
+
+  useEffect(() => {
+    if (!autoPick) return;
+    const candidates = universe
+      .filter((a) => trendDirection(a) === "up" && pctChange(a) > 1)
+      .sort((a, b) => pctChange(b) - pctChange(a))
+      .slice(0, 3);
+    if (candidates.length) {
+      setWatchlist((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        candidates.forEach((c) => {
+          if (!next.has(c.symbol)) { next.add(c.symbol); changed = true; }
+        });
+        return changed ? next : prev;
+      });
+      setAutoAdded((prev) => {
+        const next = new Set(prev);
+        candidates.forEach((c) => next.add(c.symbol));
+        return next;
+      });
+    }
+  }, [universe, autoPick]);
+
+  const byChange = useMemo(
+    () => [...universe].sort((a, b) => pctChange(b) - pctChange(a)),
+    [universe]
+  );
+  const gainers = byChange.slice(0, 5);
+  const losers = [...byChange].reverse().slice(0, 5);
+  const topMovers = useMemo(
+    () => [...universe].sort((a, b) => Math.abs(pctChange(b)) - Math.abs(pctChange(a))).slice(0, 8),
+    [universe]
+  );
+
+  const watchlisted = universe.filter((a) => watchlist.has(a.symbol));
+
+  const filtered = universe.filter(
+    (a) =>
+      (typeFilter === "all" || a.type === typeFilter) &&
+      (a.symbol.toLowerCase().includes(query.toLowerCase()) ||
+        a.name.toLowerCase().includes(query.toLowerCase()))
+  );
+
+  const selected = universe.find((a) => a.symbol === selectedSymbol) || universe[0];
+  const chartData = useMemo(() => sma(selected.history, 5), [selected]);
+  const high = Math.max(...selected.history.map((h) => h.price));
+  const low = Math.min(...selected.history.map((h) => h.price));
+
+  function toggleWatch(symbol) {
+    setWatchlist((prev) => {
+      const next = new Set(prev);
+      next.has(symbol) ? next.delete(symbol) : next.add(symbol);
+      return next;
+    });
+  }
+
+  function sendOtp() {
+    const digits = auth.phone.replace(/\D/g, "");
+    if (!auth.name.trim()) {
+      setAuth((a) => ({ ...a, error: "Please enter your name." }));
+      return;
+    }
+    if (digits.length < 10) {
+      setAuth((a) => ({ ...a, error: "Enter a valid 10-digit phone number." }));
+      return;
+    }
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    setAuth((a) => ({ ...a, stage: "otp", sentOtp: code, otpInput: "", error: "" }));
+  }
+
+  function verifyOtp() {
+    if (auth.otpInput === auth.sentOtp) {
+      setAuth((a) => ({ ...a, verified: true, error: "" }));
+    } else {
+      setAuth((a) => ({ ...a, error: "Incorrect OTP, please try again." }));
+    }
+  }
+
+  function logout() {
+    setAuth({ stage: "phone", name: "", phone: "", otpInput: "", sentOtp: null, verified: false, error: "" });
+  }
+
+  function logTrade(symbol, side, qty, price) {
+    setTrades((prev) => [
+      { id: `${Date.now()}-${Math.random()}`, symbol, side, qty, price, total: qty * price, time: new Date() },
+      ...prev,
+    ].slice(0, 50));
+  }
+
+  function buyAsset(asset, qty) {
+    const cost = asset.price * qty;
+    if (qty <= 0 || cost > cash) return;
+    setCash((c) => c - cost);
+    setHoldings((h) => ({ ...h, [asset.symbol]: (h[asset.symbol] || 0) + qty }));
+    logTrade(asset.symbol, "buy", qty, asset.price);
+  }
+
+  function sellAsset(asset, qty) {
+    const owned = holdings[asset.symbol] || 0;
+    if (qty <= 0 || qty > owned) return;
+    setCash((c) => c + asset.price * qty);
+    setHoldings((h) => ({ ...h, [asset.symbol]: owned - qty }));
+    logTrade(asset.symbol, "sell", qty, asset.price);
+  }
+
+  const portfolioValue = universe.reduce((sum, a) => sum + (holdings[a.symbol] || 0) * a.price, 0);
+
+  const tabs = [
+    { id: "live", label: "Live", icon: Radio },
+    { id: "trending", label: "Trending", icon: Flame },
+    { id: "search", label: "Search", icon: Search },
+    { id: "analyse", label: "Analyse", icon: BarChart3 },
+    { id: "api", label: "API", icon: Key },
+  ];
+
+  if (!auth.verified) {
+    return (
+      <div
+        className="min-h-screen w-full flex items-center justify-center px-5"
+        style={{ backgroundColor: C.bg, color: C.text, fontFamily: "'IBM Plex Sans', sans-serif" }}
+      >
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+          button:focus-visible, input:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+        `}</style>
+        <div className="w-full max-w-sm rounded-2xl p-6" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+          <h1
+            className="text-2xl mb-1"
+            style={{ fontFamily: "'Archivo Black', sans-serif", color: C.text, letterSpacing: "0.01em" }}
+          >
+            RAMAN
+          </h1>
+          <p className="text-xs mb-6" style={{ color: C.muted }}>Log in with your phone number to continue</p>
+
+          {auth.stage === "phone" && (
+            <>
+              <label className="block text-[10px] uppercase tracking-wide mb-1" style={{ color: C.muted }}>Name</label>
+              <input
+                type="text"
+                value={auth.name}
+                onChange={(e) => setAuth((a) => ({ ...a, name: e.target.value, error: "" }))}
+                placeholder="Your name"
+                className="w-full rounded-lg px-3 py-2.5 text-sm mb-3"
+                style={{ backgroundColor: C.surfaceAlt, border: `1px solid ${C.border}`, color: C.text }}
+              />
+
+              <label className="block text-[10px] uppercase tracking-wide mb-1" style={{ color: C.muted }}>Phone number</label>
+              <div className="flex items-center gap-2 mb-2">
+                <Phone size={15} style={{ color: C.muted }} />
+                <input
+                  type="tel"
+                  value={auth.phone}
+                  onChange={(e) => setAuth((a) => ({ ...a, phone: e.target.value, error: "" }))}
+                  placeholder="+91 98765 43210"
+                  className="w-full rounded-lg px-3 py-2.5 text-sm"
+                  style={{ backgroundColor: C.surfaceAlt, border: `1px solid ${C.border}`, color: C.text }}
+                />
+              </div>
+              {auth.error && <p className="text-xs mb-2" style={{ color: C.negative }}>{auth.error}</p>}
+              <button
+                onClick={sendOtp}
+                className="w-full rounded-lg py-2.5 text-sm font-semibold mt-2"
+                style={{ backgroundColor: C.accent, color: "#0B1120" }}
+              >
+                Send OTP
+              </button>
+            </>
+          )}
+
+          {auth.stage === "otp" && (
+            <>
+              <p className="text-xs mb-3" style={{ color: C.muted }}>
+                Enter the 6-digit code for <span style={{ color: C.text }}>{auth.phone}</span>
+              </p>
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck size={15} style={{ color: C.muted }} />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={auth.otpInput}
+                  onChange={(e) => setAuth((a) => ({ ...a, otpInput: e.target.value.replace(/\D/g, ""), error: "" }))}
+                  placeholder="000000"
+                  className="w-full rounded-lg px-3 py-2.5 text-sm tracking-[0.3em] text-center"
+                  style={{ backgroundColor: C.surfaceAlt, border: `1px solid ${C.border}`, color: C.text, fontFamily: "'IBM Plex Mono', monospace" }}
+                />
+              </div>
+              {auth.error && <p className="text-xs mb-2" style={{ color: C.negative }}>{auth.error}</p>}
+              <button
+                onClick={verifyOtp}
+                className="w-full rounded-lg py-2.5 text-sm font-semibold mt-2"
+                style={{ backgroundColor: C.accent, color: "#0B1120" }}
+              >
+                Verify &amp; log in
+              </button>
+              <button
+                onClick={() => setAuth((a) => ({ ...a, stage: "phone", otpInput: "", error: "" }))}
+                className="w-full text-xs mt-3"
+                style={{ color: C.muted }}
+              >
+                ← Use a different number
+              </button>
+
+              <div className="rounded-lg p-3 mt-4 flex gap-2" style={{ backgroundColor: "rgba(232,176,75,0.08)", border: `1px solid rgba(232,176,75,0.3)` }}>
+                <AlertTriangle size={14} style={{ color: C.accent, flexShrink: 0, marginTop: 1 }} />
+                <p className="text-[11px] leading-relaxed" style={{ color: C.muted }}>
+                  Demo mode: no real SMS is sent. Your code is{" "}
+                  <span style={{ color: C.accent, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600 }}>{auth.sentOtp}</span>.
+                  Real SMS delivery needs a backend with a provider like Twilio, MSG91, or Firebase Phone Auth.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="min-h-screen w-full"
+      style={{ backgroundColor: C.bg, color: C.text, fontFamily: "'IBM Plex Sans', sans-serif" }}
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+        @keyframes scroll-tape { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        .tape-track { animation: scroll-tape 26s linear infinite; }
+        @media (prefers-reduced-motion: reduce) { .tape-track { animation: none; } }
+        button:focus-visible, input:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+      `}</style>
+
+      {/* SIGNATURE: scrolling ticker tape */}
+      <div
+        className="overflow-hidden whitespace-nowrap py-2"
+        style={{
+          backgroundColor: "#0E1526",
+          borderTop: `2px dashed rgba(232,176,75,0.35)`,
+          borderBottom: `2px dashed rgba(232,176,75,0.35)`,
+        }}
+      >
+        <div className="tape-track inline-block">
+          {[...universe, ...universe].map((a, i) => {
+            const pct = pctChange(a);
+            const up = pct >= 0;
+            return (
+              <span
+                key={i}
+                className="inline-flex items-center gap-2 px-4 text-sm"
+                style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+              >
+                <span style={{ color: C.accent, fontWeight: 600 }}>{a.symbol}</span>
+                <span style={{ color: C.text }}>{fmtPrice(a.price)}</span>
+                <span style={{ color: up ? C.positive : C.negative }}>
+                  {up ? "▲" : "▼"} {Math.abs(pct).toFixed(2)}%
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* HEADER */}
+      <div className="px-5 pt-6 pb-4 flex items-start justify-between gap-4">
+        <div>
+          <h1
+            className="text-2xl tracking-tight"
+            style={{ fontFamily: "'Archivo Black', sans-serif", color: C.text, letterSpacing: "0.01em" }}
+          >
+            RAMAN
+          </h1>
+          <p className="text-xs mt-1" style={{ color: C.muted }}>
+            Stocks &amp; crypto board · simulated data, connect an API key to go live
+          </p>
+        </div>
+        <button
+          onClick={() => setAutoRefresh((v) => !v)}
+          className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold shrink-0"
+          style={{
+            backgroundColor: C.surfaceAlt,
+            border: `1px solid ${C.border}`,
+            color: autoRefresh ? C.positive : C.muted,
+          }}
+        >
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ backgroundColor: autoRefresh ? C.positive : C.muted }}
+          />
+          {autoRefresh ? <Pause size={12} /> : <Play size={12} />}
+          {autoRefresh ? "Auto-refresh on" : "Paused"}
+        </button>
+      </div>
+
+      <div className="px-5 pb-3 flex items-center justify-between">
+        <span className="text-xs" style={{ color: C.muted }}>Logged in as {auth.name} · {auth.phone}</span>
+        <button onClick={logout} className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: C.muted }}>
+          <LogOut size={12} />
+          Log out
+        </button>
+      </div>
+
+      {/* TABS */}
+      <div className="px-5 flex gap-1.5 pb-4">
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+              style={{
+                backgroundColor: active ? C.accent : C.surface,
+                color: active ? "#0B1120" : C.muted,
+                border: `1px solid ${active ? C.accent : C.border}`,
+              }}
+            >
+              <Icon size={14} />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="px-5 pb-16">
+        {/* LIVE */}
+        {tab === "live" && (
+          <div>
+            <div className="rounded-xl p-3 mb-4 flex items-center justify-between gap-3" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+              <div>
+                <div className="text-xs font-semibold" style={{ color: C.text }}>Auto-add profit picks</div>
+                <div className="text-[10px] mt-0.5 leading-relaxed" style={{ color: C.muted }}>
+                  Auto-adds assets currently in a strong simulated uptrend. Based on made-up demo data only —
+                  not investment advice and doesn't guarantee real profit.
+                </div>
+              </div>
+              <button
+                onClick={() => setAutoPick((v) => !v)}
+                className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
+                style={{
+                  backgroundColor: autoPick ? C.accent : C.surfaceAlt,
+                  color: autoPick ? "#0B1120" : C.muted,
+                  border: `1px solid ${autoPick ? C.accent : C.border}`,
+                }}
+              >
+                {autoPick ? <Pause size={11} /> : <Play size={11} />}
+                {autoPick ? "On" : "Off"}
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Flame size={13} style={{ color: C.accent }} />
+                <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: C.muted }}>
+                  Now trending
+                </h2>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {topMovers.map((a) => {
+                  const pct = pctChange(a);
+                  const up = pct >= 0;
+                  return (
+                    <button
+                      key={a.symbol}
+                      onClick={() => { setSelectedSymbol(a.symbol); setTab("analyse"); }}
+                      className="shrink-0 flex items-center gap-2 rounded-full pl-3 pr-2.5 py-1.5"
+                      style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}
+                    >
+                      <span className="text-xs font-semibold">{a.symbol}</span>
+                      <span
+                        className="text-xs font-semibold"
+                        style={{ color: up ? C.positive : C.negative, fontFamily: "'IBM Plex Mono', monospace" }}
+                      >
+                        {up ? "▲" : "▼"} {Math.abs(pct).toFixed(1)}%
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {watchlisted.map((a) => (
+              <div
+                key={a.symbol}
+                className="rounded-xl p-4"
+                style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm">{a.symbol}</span>
+                      <TypeBadge type={a.type} />
+                      {autoAdded.has(a.symbol) && (
+                        <span
+                          className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                          style={{ color: C.accent, backgroundColor: "rgba(232,176,75,0.12)" }}
+                        >
+                          Auto-pick
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: C.muted }}>{a.name}</div>
+                  </div>
+                  <ChangeTag pct={pctChange(a)} />
+                </div>
+                <div className="mt-1.5">
+                  <TrendBadge asset={a} />
+                </div>
+                <div className="mt-2">
+                  <Sparkline history={a.history} color={pctChange(a) >= 0 ? C.positive : C.negative} />
+                </div>
+                <div
+                  className="text-lg font-semibold mt-1"
+                  style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                >
+                  ${fmtPrice(a.price)}
+                </div>
+              </div>
+            ))}
+            {watchlisted.length === 0 && (
+              <p className="text-sm col-span-2" style={{ color: C.muted }}>
+                Your watchlist is empty — add assets from the Search tab.
+              </p>
+            )}
+          </div>
+          </div>
+        )}
+
+        {/* TRENDING */}
+        {tab === "trending" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {[
+              { label: "Top gainers", data: gainers },
+              { label: "Top losers", data: losers },
+            ].map((group) => (
+              <div key={group.label}>
+                <h2 className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.muted }}>
+                  {group.label}
+                </h2>
+                <div className="flex flex-col gap-2">
+                  {group.data.map((a) => {
+                    const pct = pctChange(a);
+                    const mag = Math.min(Math.abs(pct) / 6, 1);
+                    return (
+                      <button
+                        key={a.symbol}
+                        onClick={() => { setSelectedSymbol(a.symbol); setTab("analyse"); }}
+                        className="rounded-lg p-3 text-left relative overflow-hidden"
+                        style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}
+                      >
+                        <div
+                          className="absolute left-0 top-0 bottom-0"
+                          style={{
+                            width: `${mag * 100}%`,
+                            backgroundColor: pct >= 0 ? "rgba(82,214,138,0.10)" : "rgba(242,102,110,0.10)",
+                          }}
+                        />
+                        <div className="relative flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">{a.symbol}</span>
+                            <TypeBadge type={a.type} />
+                          </div>
+                          <ChangeTag pct={pct} />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* SEARCH */}
+        {tab === "search" && (
+          <div>
+            <div className="relative mb-3">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.muted }} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search symbol or name…"
+                className="w-full rounded-lg pl-9 pr-3 py-2.5 text-sm"
+                style={{ backgroundColor: C.surface, border: `1px solid ${C.border}`, color: C.text }}
+              />
+            </div>
+            <div className="flex gap-1.5 mb-4">
+              {[
+                ["all", "All"],
+                ["stock", "Stocks"],
+                ["crypto", "Crypto"],
+                ["fund", "Funds"],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setTypeFilter(id)}
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold"
+                  style={{
+                    backgroundColor: typeFilter === id ? C.accent : C.surface,
+                    color: typeFilter === id ? "#0B1120" : C.muted,
+                    border: `1px solid ${typeFilter === id ? C.accent : C.border}`,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2">
+              {filtered.map((a) => {
+                const inWatch = watchlist.has(a.symbol);
+                return (
+                  <div
+                    key={a.symbol}
+                    className="flex items-center gap-3 rounded-lg p-3"
+                    style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}
+                  >
+                    <button onClick={() => toggleWatch(a.symbol)} aria-label="Toggle watchlist">
+                      <Star size={16} fill={inWatch ? C.accent : "none"} color={inWatch ? C.accent : C.muted} />
+                    </button>
+                    <button
+                      onClick={() => { setSelectedSymbol(a.symbol); setTab("analyse"); }}
+                      className="flex-1 flex items-center justify-between text-left"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm">{a.symbol}</span>
+                          <TypeBadge type={a.type} />
+                        </div>
+                        <div className="text-xs" style={{ color: C.muted }}>{a.name}</div>
+                      </div>
+                      <div className="text-right">
+                        <div style={{ fontFamily: "'IBM Plex Mono', monospace" }}>${fmtPrice(a.price)}</div>
+                        <ChangeTag pct={pctChange(a)} />
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
+              {filtered.length === 0 && (
+                <p className="text-sm" style={{ color: C.muted }}>No assets match “{query}”.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ANALYSE */}
+        {tab === "analyse" && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: C.muted }}>
+                All assets
+              </h2>
+              <button
+                onClick={() => setAutoCycle((v) => !v)}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+                style={{
+                  backgroundColor: autoCycle ? C.accent : C.surface,
+                  color: autoCycle ? "#0B1120" : C.muted,
+                  border: `1px solid ${autoCycle ? C.accent : C.border}`,
+                }}
+              >
+                {autoCycle ? <Pause size={11} /> : <Play size={11} />}
+                Auto analyse all
+              </button>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-3 mb-2">
+              {universe.map((a) => (
+                <button
+                  key={a.symbol}
+                  onClick={() => setSelectedSymbol(a.symbol)}
+                  className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold"
+                  style={{
+                    backgroundColor: selected.symbol === a.symbol ? C.accent : C.surface,
+                    color: selected.symbol === a.symbol ? "#0B1120" : C.muted,
+                    border: `1px solid ${selected.symbol === a.symbol ? C.accent : C.border}`,
+                  }}
+                >
+                  {a.symbol}
+                </button>
+              ))}
+            </div>
+
+            <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{selected.symbol}</span>
+                    <TypeBadge type={selected.type} />
+                  </div>
+                  <div className="text-xs" style={{ color: C.muted }}>{selected.name}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xl font-semibold" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                    ${fmtPrice(selected.price)}
+                  </div>
+                  <div className="flex items-center gap-1.5 justify-end mt-0.5">
+                    <ChangeTag pct={pctChange(selected)} />
+                    <TrendBadge asset={selected} />
+                  </div>
+                </div>
+              </div>
+
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={chartData}>
+                  <CartesianGrid stroke={C.border} strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="t" reversed tick={{ fill: C.muted, fontSize: 10 }} axisLine={{ stroke: C.border }} tickLine={false} />
+                  <YAxis domain={["auto", "auto"]} tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} width={50} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: C.surfaceAlt, border: `1px solid ${C.border}`, fontSize: 12 }}
+                    labelStyle={{ color: C.muted }}
+                    formatter={(v) => (v == null ? "–" : `$${fmtPrice(v)}`)}
+                  />
+                  <Line type="monotone" dataKey="price" stroke={C.accent} strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="sma" stroke={C.muted} strokeWidth={1.5} strokeDasharray="4 3" dot={false} isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="text-[10px] mt-1" style={{ color: C.muted }}>— price  ---- 5-period average</div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              {[
+                ["Open", `$${fmtPrice(selected.open)}`],
+                ["High", `$${fmtPrice(high)}`],
+                ["Low", `$${fmtPrice(low)}`],
+                ["Volume", selected.volume.toLocaleString()],
+              ].map(([label, val]) => (
+                <div key={label} className="rounded-lg p-3" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+                  <div className="text-[10px] uppercase tracking-wide" style={{ color: C.muted }}>{label}</div>
+                  <div className="text-sm font-semibold mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{val}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* PAPER TRADING PANEL */}
+            <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-1.5">
+                  <Wallet size={13} style={{ color: C.accent }} />
+                  <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: C.muted }}>
+                    {broker.connected ? `Trade via ${broker.provider}` : "Paper trade (virtual money)"}
+                  </h2>
+                </div>
+                <span
+                  className="text-[10px] rounded-full px-2 py-0.5 font-semibold"
+                  style={{
+                    color: broker.connected ? C.positive : C.muted,
+                    backgroundColor: broker.connected ? "rgba(82,214,138,0.12)" : "rgba(136,148,173,0.12)",
+                  }}
+                >
+                  {broker.connected ? "Broker connected" : "No broker connected"}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="number"
+                  min="1"
+                  value={orderQty}
+                  onChange={(e) => setOrderQty(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-20 rounded-lg px-2 py-2 text-sm text-center"
+                  style={{ backgroundColor: C.surfaceAlt, border: `1px solid ${C.border}`, color: C.text }}
+                />
+                <span className="text-xs" style={{ color: C.muted }}>units of {selected.symbol}</span>
+                <span className="text-xs ml-auto" style={{ color: C.muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+                  ≈ ${fmtPrice(selected.price * orderQty)}
+                </span>
+              </div>
+
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => buyAsset(selected, orderQty)}
+                  className="flex-1 rounded-lg py-2 text-sm font-semibold"
+                  style={{ backgroundColor: C.positive, color: "#0B1120" }}
+                >
+                  Buy
+                </button>
+                <button
+                  onClick={() => sellAsset(selected, orderQty)}
+                  className="flex-1 rounded-lg py-2 text-sm font-semibold"
+                  style={{ backgroundColor: C.negative, color: "#0B1120" }}
+                >
+                  Sell
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between text-xs" style={{ color: C.muted }}>
+                <span>Cash: <span style={{ color: C.text, fontFamily: "'IBM Plex Mono', monospace" }}>${cash.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></span>
+                <span>Holding: <span style={{ color: C.text, fontFamily: "'IBM Plex Mono', monospace" }}>{(holdings[selected.symbol] || 0)} {selected.symbol}</span></span>
+                <span>Portfolio: <span style={{ color: C.text, fontFamily: "'IBM Plex Mono', monospace" }}>${(cash + portfolioValue).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></span>
+              </div>
+
+              {!broker.connected && (
+                <p className="text-[10px] mt-3 leading-relaxed" style={{ color: C.muted }}>
+                  This uses virtual money on simulated prices only. Connect a broker in the API tab to trade for real.
+                </p>
+              )}
+            </div>
+
+            {/* TRADE HISTORY */}
+            <div className="rounded-xl p-4 mt-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+              <div className="flex items-center gap-1.5 mb-3">
+                <History size={13} style={{ color: C.accent }} />
+                <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: C.muted }}>
+                  Buy &amp; sell history
+                </h2>
+              </div>
+              {trades.length === 0 ? (
+                <p className="text-xs" style={{ color: C.muted }}>No trades yet — your buy and sell orders will show up here.</p>
+              ) : (
+                <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
+                  {trades.map((t) => (
+                    <div key={t.id} className="flex items-center gap-3 text-xs">
+                      <span
+                        className="rounded px-1.5 py-0.5 font-semibold uppercase w-11 text-center shrink-0"
+                        style={{
+                          color: t.side === "buy" ? C.positive : C.negative,
+                          backgroundColor: t.side === "buy" ? "rgba(82,214,138,0.12)" : "rgba(242,102,110,0.12)",
+                        }}
+                      >
+                        {t.side}
+                      </span>
+                      <span className="font-semibold w-14 shrink-0">{t.symbol}</span>
+                      <span style={{ color: C.muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+                        {t.qty} @ ${fmtPrice(t.price)}
+                      </span>
+                      <span className="ml-auto shrink-0" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                        ${t.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="shrink-0 w-14 text-right" style={{ color: C.muted }}>
+                        {t.time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* API SETTINGS */}
+        {tab === "api" && (
+          <div>
+            <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <Key size={13} style={{ color: C.accent }} />
+                <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: C.muted }}>
+                  Broker / exchange API
+                </h2>
+              </div>
+              <p className="text-xs mb-4" style={{ color: C.muted }}>
+                Enter your broker or exchange credentials here to move from paper trading to real orders.
+              </p>
+
+              <label className="block text-[10px] uppercase tracking-wide mb-1" style={{ color: C.muted }}>Provider</label>
+              <select
+                value={broker.provider}
+                onChange={(e) => setBroker((b) => ({ ...b, provider: e.target.value, connected: false }))}
+                className="w-full rounded-lg px-3 py-2 text-sm mb-3"
+                style={{ backgroundColor: C.surfaceAlt, border: `1px solid ${C.border}`, color: C.text }}
+              >
+                <option value="alpaca">Alpaca (stocks)</option>
+                <option value="ibkr">Interactive Brokers (stocks)</option>
+                <option value="coinbase">Coinbase (crypto)</option>
+                <option value="kraken">Kraken (crypto)</option>
+                <option value="custom">Custom endpoint</option>
+              </select>
+
+              <label className="block text-[10px] uppercase tracking-wide mb-1" style={{ color: C.muted }}>API key</label>
+              <input
+                type="password"
+                value={broker.apiKey}
+                onChange={(e) => setBroker((b) => ({ ...b, apiKey: e.target.value, connected: false }))}
+                placeholder="Paste your API key"
+                className="w-full rounded-lg px-3 py-2 text-sm mb-3"
+                style={{ backgroundColor: C.surfaceAlt, border: `1px solid ${C.border}`, color: C.text }}
+              />
+
+              <label className="block text-[10px] uppercase tracking-wide mb-1" style={{ color: C.muted }}>API secret</label>
+              <input
+                type="password"
+                value={broker.apiSecret}
+                onChange={(e) => setBroker((b) => ({ ...b, apiSecret: e.target.value, connected: false }))}
+                placeholder="Paste your API secret"
+                className="w-full rounded-lg px-3 py-2 text-sm mb-4"
+                style={{ backgroundColor: C.surfaceAlt, border: `1px solid ${C.border}`, color: C.text }}
+              />
+
+              <button
+                onClick={() => setBroker((b) => ({ ...b, connected: !!(b.apiKey && b.apiSecret) }))}
+                className="w-full rounded-lg py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
+                style={{ backgroundColor: C.accent, color: "#0B1120" }}
+              >
+                {broker.connected ? <CheckCircle2 size={14} /> : <Key size={14} />}
+                {broker.connected ? "Connected" : "Save & connect"}
+              </button>
+            </div>
+
+            <div className="rounded-xl p-4 flex gap-3" style={{ backgroundColor: "rgba(242,102,110,0.08)", border: `1px solid rgba(242,102,110,0.3)` }}>
+              <AlertTriangle size={16} style={{ color: C.negative, flexShrink: 0, marginTop: 2 }} />
+              <div className="text-xs leading-relaxed" style={{ color: C.text }}>
+                <strong>This screen stores your key only in this session's memory — it does not place real trades yet.</strong>
+                <p className="mt-1" style={{ color: C.muted }}>
+                  Real order execution needs a secure backend: browser code can't safely hold an API secret or call most
+                  broker APIs directly (CORS and key-exposure risk). To go live, route these credentials through your
+                  own server or a backend proxy that signs and forwards orders to {broker.provider}. Once that backend
+                  exists, the Buy/Sell buttons in Analyse can call it instead of the paper-trading logic.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
